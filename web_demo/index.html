@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Digit Reader</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;600&display=swap">
+</head>
+<body>
+<style>
+/* Layout: a two-panel instrument — drawing pad on the left, the model's reading on the right; stacks on phones. */
+:root {
+  --bg: #f5f6f8; --panel: #ffffff; --ink: #14171f; --muted: #5d6472; --line: #dfe2e8;
+  --accent: #2a5bd7; --accent-soft: #e3eafb; --bar: #c9d3e6; --pad-ink: #111111; --pad-paper: #ffffff;
+  --font-ui: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --bg: #0f1218; --panel: #171b23; --ink: #e9ecf2; --muted: #9aa3b2; --line: #2a303b;
+    --accent: #7ea2ff; --accent-soft: #1f2a44; --bar: #343c4c; color-scheme: dark; }
+}
+:root[data-theme="dark"] { --bg: #0f1218; --panel: #171b23; --ink: #e9ecf2; --muted: #9aa3b2; --line: #2a303b;
+  --accent: #7ea2ff; --accent-soft: #1f2a44; --bar: #343c4c; color-scheme: dark; }
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font-ui); font-size: 16px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.wrap { max-width: 980px; margin: 0 auto; padding-block: 28px 48px; }
+h1 { font-size: clamp(1.7rem, 4vw, 2.3rem); margin: 0 0 4px; letter-spacing: -0.01em; text-wrap: balance; }
+.sub { color: var(--muted); margin: 0 0 22px; max-width: 64ch; }
+.grid { display: grid; grid-template-columns: minmax(0, 360px) minmax(0, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 760px) { .grid { grid-template-columns: 1fr; } }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px; min-width: 0; }
+.label { font-size: 0.75rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); font-weight: 600; margin: 0 0 10px; }
+#pad { width: 100%; max-width: 324px; aspect-ratio: 1; display: block; background: var(--pad-paper); border-radius: 10px;
+  border: 2px dashed var(--line); touch-action: none; cursor: crosshair; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 12px; }
+button { font: inherit; font-size: 0.9rem; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+  padding: 7px 14px; cursor: pointer; }
+button:hover { border-color: var(--muted); }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.samples { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 4px; margin-top: 8px; }
+.samples button { padding: 0; aspect-ratio: 1; overflow: hidden; background: #000; border-radius: 6px; border: 1px solid var(--line); }
+.samples canvas { width: 100%; height: 100%; image-rendering: pixelated; display: block; }
+.hint { font-size: 0.82rem; color: var(--muted); margin-top: 8px; }
+.result { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 18px; align-items: center; }
+.digit { font-family: var(--font-mono); font-size: 5.5rem; line-height: 1; font-weight: 600; color: var(--accent); min-width: 1.2ch; text-align: center; }
+.conf { font-size: 1.05rem; } .conf b { font-variant-numeric: tabular-nums; }
+.seen { display: flex; gap: 14px; align-items: center; margin-top: 16px; flex-wrap: wrap; }
+#seen { width: 112px; height: 112px; image-rendering: pixelated; border-radius: 6px; background: #000; flex: 0 0 auto; }
+.bars { display: grid; gap: 5px; margin-top: 18px; }
+.bar { display: grid; grid-template-columns: 1.6ch minmax(0, 1fr) 5.5ch; gap: 10px; align-items: center; font-family: var(--font-mono); font-size: 0.9rem; }
+.track { height: 14px; background: var(--accent-soft); border-radius: 4px; overflow: hidden; }
+.fill { height: 100%; width: 0; background: var(--bar); border-radius: 4px; transition: width 0.25s ease; }
+.bar.top .fill { background: var(--accent); }
+.bar span:last-child { text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+@media (prefers-reduced-motion: reduce) { .fill { transition: none; } }
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-top: 20px; }
+.fact { background: var(--bg); border-radius: 10px; padding: 10px 12px; }
+.fact b { display: block; font-family: var(--font-mono); font-size: 1.1rem; }
+.fact span { font-size: 0.8rem; color: var(--muted); }
+.empty { color: var(--muted); }
+footer { margin-top: 26px; font-size: 0.82rem; color: var(--muted); }
+</style>
+
+<div class="wrap">
+  <h1>Digit Reader</h1>
+  <p class="sub">Draw a single digit from 0 to 9. A convolutional neural network trained on the MNIST dataset reads it right here in your browser.</p>
+  <div class="grid">
+    <section class="panel" aria-label="Drawing pad">
+      <p class="label">Your handwriting</p>
+      <canvas id="pad" width="280" height="280" aria-label="Drawing pad: draw a digit"></canvas>
+      <div class="row">
+        <button id="clear" class="primary" type="button">Clear</button>
+        <span class="hint" style="margin:0">Draw large and centred, with one stroke or several.</span>
+      </div>
+      <p class="label" style="margin-top:18px">Or try a real MNIST test image</p>
+      <div class="samples" id="samples"></div>
+    </section>
+    <section class="panel" aria-live="polite" aria-label="Prediction">
+      <p class="label">The model's reading</p>
+      <div class="result">
+        <div class="digit" id="digit">–</div>
+        <div>
+          <div class="conf" id="conf"><span class="empty">Waiting for a digit…</span></div>
+          <div class="seen">
+            <canvas id="seen" width="28" height="28" aria-label="The 28 by 28 image the model receives"></canvas>
+            <div class="hint" style="margin:0;max-width:30ch">What the model sees: your drawing inverted, cropped, shrunk to 20 px and centred in a 28×28 grid, like MNIST.</div>
+          </div>
+        </div>
+      </div>
+      <div class="bars" id="bars"></div>
+      <div class="facts">
+        <div class="fact"><b>34,826</b><span>learned parameters</span></div>
+        <div class="fact"><b>99.19%</b><span>accuracy on 10,000 test images</span></div>
+        <div class="fact"><b>Conv → Pool ×2</b><span>then dropout and softmax</span></div>
+      </div>
+    </section>
+  </div>
+  <footer>Naviotech AI internship project: Handwritten Digit Recognition using Neural Networks. The model runs locally in this page; nothing you draw is sent anywhere.</footer>
+</div>
+
+<script src="model_weights.js"></script>
+<script>
+(function () {
+  "use strict";
+  var W = window.MODEL_WEIGHTS, SAMPLES = window.MNIST_SAMPLES;
+  function dec(b64) { var s = atob(b64), u = new Uint8Array(s.length); for (var i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); return new Float32Array(u.buffer); }
+  var k1 = dec(W.conv1_w), b1 = dec(W.conv1_b), k2 = dec(W.conv2_w), b2 = dec(W.conv2_b), kd = dec(W.dense_w), bd = dec(W.dense_b);
+  var F1 = b1.length, F2 = b2.length;
+
+  function conv(inp, H, Wd, C, ker, bias, F) {           // valid conv 3x3, ReLU, NHWC
+    var OH = H - 2, OW = Wd - 2, out = new Float32Array(OH * OW * F);
+    for (var y = 0; y < OH; y++) for (var x = 0; x < OW; x++) {
+      var o = (y * OW + x) * F;
+      for (var f = 0; f < F; f++) out[o + f] = bias[f];
+      for (var i = 0; i < 3; i++) for (var j = 0; j < 3; j++) {
+        var ib = ((y + i) * Wd + (x + j)) * C, kb = (i * 3 + j) * C * F;
+        for (var c = 0; c < C; c++) {
+          var v = inp[ib + c]; if (v === 0) continue;
+          var kk = kb + c * F;
+          for (var f2 = 0; f2 < F; f2++) out[o + f2] += v * ker[kk + f2];
+        }
+      }
+      for (var f3 = 0; f3 < F; f3++) if (out[o + f3] < 0) out[o + f3] = 0;
+    }
+    return out;
+  }
+  function pool(inp, H, Wd, C) {
+    var OH = Math.floor(H / 2), OW = Math.floor(Wd / 2), out = new Float32Array(OH * OW * C);
+    for (var y = 0; y < OH; y++) for (var x = 0; x < OW; x++) for (var c = 0; c < C; c++) {
+      var m = -Infinity;
+      for (var i = 0; i < 2; i++) for (var j = 0; j < 2; j++) { var v = inp[((2 * y + i) * Wd + 2 * x + j) * C + c]; if (v > m) m = v; }
+      out[(y * OW + x) * C + c] = m;
+    }
+    return out;
+  }
+  function predict(img28) {
+    var a = conv(img28, 28, 28, 1, k1, b1, F1), p = pool(a, 26, 26, F1);
+    var b = conv(p, 13, 13, F1, k2, b2, F2), q = pool(b, 11, 11, F2);
+    var z = new Float32Array(10), n = q.length;
+    for (var o = 0; o < 10; o++) { var s = bd[o]; for (var k = 0; k < n; k++) s += q[k] * kd[k * 10 + o]; z[o] = s; }
+    var mx = Math.max.apply(null, z), sum = 0, pr = new Float32Array(10);
+    for (var t = 0; t < 10; t++) { pr[t] = Math.exp(z[t] - mx); sum += pr[t]; }
+    for (var u = 0; u < 10; u++) pr[u] /= sum;
+    return pr;
+  }
+
+  /* MNIST-style preprocessing: invert, crop, fit in 20x20, centre by mass in 28x28 */
+  function preprocess(cv) {
+    var w = cv.width, h = cv.height, d = cv.getContext("2d").getImageData(0, 0, w, h).data;
+    var raw = new Float32Array(w * h), ink = new Uint8ClampedArray(w * h), x0 = w, y0 = h, x1 = -1, y1 = -1, peak = 0;
+    for (var i = 0; i < w * h; i++) { raw[i] = 255 - (0.299 * d[i * 4] + 0.587 * d[i * 4 + 1] + 0.114 * d[i * 4 + 2]); if (raw[i] > peak) peak = raw[i]; }
+    if (peak < 30) return null;
+    for (var i2 = 0; i2 < w * h; i2++) {
+      var v = raw[i2] < 0.15 * peak ? 0 : Math.min(255, raw[i2] * 255 / peak); ink[i2] = v;
+      if (raw[i2] >= 0.3 * peak) { var x = i2 % w, y = (i2 / w) | 0; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+    }
+    if (x1 < 0) return null;
+    var cw = x1 - x0 + 1, ch = y1 - y0 + 1, s = 20 / Math.max(cw, ch);
+    var nw = Math.max(1, Math.round(cw * s)), nh = Math.max(1, Math.round(ch * s));
+    var tmp = document.createElement("canvas"); tmp.width = cw; tmp.height = ch;
+    var tctx = tmp.getContext("2d"), td = tctx.createImageData(cw, ch);
+    for (var yy = 0; yy < ch; yy++) for (var xx = 0; xx < cw; xx++) {
+      var v2 = ink[(y0 + yy) * w + x0 + xx], o = (yy * cw + xx) * 4;
+      td.data[o] = td.data[o + 1] = td.data[o + 2] = v2; td.data[o + 3] = 255;
+    }
+    tctx.putImageData(td, 0, 0);
+    var sm = document.createElement("canvas"); sm.width = nw; sm.height = nh;
+    var sctx = sm.getContext("2d"); sctx.imageSmoothingEnabled = true; sctx.imageSmoothingQuality = "high";
+    sctx.drawImage(tmp, 0, 0, nw, nh);
+    var sd = sctx.getImageData(0, 0, nw, nh).data, img = new Float32Array(784);
+    var top = (28 - nh) >> 1, left = (28 - nw) >> 1, tot = 0, cy = 0, cx = 0;
+    for (var a = 0; a < nh; a++) for (var b = 0; b < nw; b++) {
+      var val = sd[(a * nw + b) * 4]; img[(top + a) * 28 + left + b] = val;
+    }
+    for (var r = 0; r < 28; r++) for (var c = 0; c < 28; c++) { var pv = img[r * 28 + c]; tot += pv; cy += r * pv; cx += c * pv; }
+    var dy = Math.round(14 - cy / tot), dx = Math.round(14 - cx / tot), out = new Float32Array(784), mx = 0;
+    for (var r2 = 0; r2 < 28; r2++) for (var c2 = 0; c2 < 28; c2++) {
+      var sr = r2 - dy, sc = c2 - dx;
+      if (sr >= 0 && sr < 28 && sc >= 0 && sc < 28) { out[r2 * 28 + c2] = img[sr * 28 + sc]; if (out[r2 * 28 + c2] > mx) mx = out[r2 * 28 + c2]; }
+    }
+    for (var q = 0; q < 784; q++) out[q] /= mx || 1;
+    return out;
+  }
+
+  /* UI */
+  var pad = document.getElementById("pad"), ctx = pad.getContext("2d");
+  var seen = document.getElementById("seen"), sctx2 = seen.getContext("2d");
+  var bars = document.getElementById("bars"), fills = [], pcts = [], rows = [];
+  for (var dgt = 0; dgt < 10; dgt++) {
+    var row = document.createElement("div"); row.className = "bar";
+    row.innerHTML = '<span>' + dgt + '</span><div class="track"><div class="fill"></div></div><span>–</span>';
+    bars.appendChild(row); rows.push(row); fills.push(row.querySelector(".fill")); pcts.push(row.lastChild);
+  }
+  function clearPad() {
+    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, 280, 280);
+    sctx2.fillStyle = "#000"; sctx2.fillRect(0, 0, 28, 28);
+    document.getElementById("digit").textContent = "–";
+    document.getElementById("conf").innerHTML = '<span class="empty">Waiting for a digit…</span>';
+    fills.forEach(function (f) { f.style.width = "0"; }); pcts.forEach(function (p) { p.textContent = "–"; });
+    rows.forEach(function (r) { r.classList.remove("top"); });
+  }
+  function run() {
+    var x = preprocess(pad); if (!x) { clearPad(); return; }
+    var id = sctx2.createImageData(28, 28);
+    for (var i = 0; i < 784; i++) { var v = Math.round(x[i] * 255); id.data[i * 4] = id.data[i * 4 + 1] = id.data[i * 4 + 2] = v; id.data[i * 4 + 3] = 255; }
+    sctx2.putImageData(id, 0, 0);
+    var p = predict(x), best = 0;
+    for (var k = 1; k < 10; k++) if (p[k] > p[best]) best = k;
+    var order = Array.from(p).map(function (v, i) { return [v, i]; }).sort(function (a, b) { return b[0] - a[0]; });
+    document.getElementById("digit").textContent = best;
+    document.getElementById("conf").innerHTML = "Predicted <b>" + best + "</b> with <b>" + (p[best] * 100).toFixed(1) +
+      "%</b> confidence<br><span style=\"color:var(--muted);font-size:.9rem\">Runner-up: " + order[1][1] + " (" + (order[1][0] * 100).toFixed(1) + "%)</span>";
+    for (var j = 0; j < 10; j++) {
+      fills[j].style.width = (p[j] * 100).toFixed(1) + "%"; pcts[j].textContent = (p[j] * 100).toFixed(1) + "%";
+      rows[j].classList.toggle("top", j === best);
+    }
+  }
+  ctx.lineCap = "round"; ctx.lineJoin = "round";
+  var drawing = false, last = null;
+  function pos(e) { var r = pad.getBoundingClientRect(); return [(e.clientX - r.left) * 280 / r.width, (e.clientY - r.top) * 280 / r.height]; }
+  pad.addEventListener("pointerdown", function (e) { drawing = true; last = pos(e); pad.setPointerCapture(e.pointerId);
+    ctx.fillStyle = "#111"; ctx.beginPath(); ctx.arc(last[0], last[1], 10, 0, Math.PI * 2); ctx.fill(); });
+  pad.addEventListener("pointermove", function (e) { if (!drawing) return; var p = pos(e);
+    ctx.strokeStyle = "#111"; ctx.lineWidth = 20; ctx.beginPath(); ctx.moveTo(last[0], last[1]); ctx.lineTo(p[0], p[1]); ctx.stroke(); last = p; });
+  function end() { if (drawing) { drawing = false; run(); } }
+  pad.addEventListener("pointerup", end); pad.addEventListener("pointercancel", end);
+  document.getElementById("clear").addEventListener("click", clearPad);
+
+  // sample thumbnails
+  var sbox = document.getElementById("samples");
+  SAMPLES.forEach(function (s) {
+    var raw = atob(s.px), btn = document.createElement("button"), c = document.createElement("canvas");
+    btn.type = "button"; btn.setAttribute("aria-label", "Load an MNIST test image of the digit " + s.label);
+    c.width = 28; c.height = 28; var g = c.getContext("2d"), id = g.createImageData(28, 28);
+    for (var i = 0; i < 784; i++) { var v = raw.charCodeAt(i); id.data[i * 4] = id.data[i * 4 + 1] = id.data[i * 4 + 2] = v; id.data[i * 4 + 3] = 255; }
+    g.putImageData(id, 0, 0); btn.appendChild(c); sbox.appendChild(btn);
+    btn.addEventListener("click", function () {
+      var inv = document.createElement("canvas"); inv.width = 28; inv.height = 28; var ig = inv.getContext("2d"), d2 = ig.createImageData(28, 28);
+      for (var i = 0; i < 784; i++) { var v = 255 - raw.charCodeAt(i); d2.data[i * 4] = d2.data[i * 4 + 1] = d2.data[i * 4 + 2] = v; d2.data[i * 4 + 3] = 255; }
+      ig.putImageData(d2, 0, 0);
+      ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, 280, 280); ctx.imageSmoothingEnabled = true; ctx.drawImage(inv, 0, 0, 280, 280); run();
+    });
+  });
+  clearPad();
+  if (SAMPLES.length) sbox.querySelector("button").click();   // open with a worked example
+})();
+</script>
+
+</body>
+</html>

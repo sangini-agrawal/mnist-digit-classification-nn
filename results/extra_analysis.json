@@ -1,0 +1,100 @@
+{
+  "user_tests": [
+    [
+      "drawn_0.png",
+      0,
+      0,
+      1.0
+    ],
+    [
+      "drawn_1.png",
+      1,
+      1,
+      0.9887
+    ],
+    [
+      "drawn_2.png",
+      2,
+      2,
+      1.0
+    ],
+    [
+      "drawn_4.png",
+      4,
+      4,
+      1.0
+    ],
+    [
+      "drawn_7.png",
+      7,
+      7,
+      1.0
+    ],
+    [
+      "drawn_8.png",
+      8,
+      8,
+      1.0
+    ],
+    [
+      "mnist_test_16_digit9.png",
+      9,
+      9,
+      1.0
+    ],
+    [
+      "mnist_test_45_digit5.png",
+      5,
+      5,
+      0.9999
+    ],
+    [
+      "mnist_test_50_digit6.png",
+      6,
+      6,
+      0.9999
+    ],
+    [
+      "photo_style_digit4.png",
+      4,
+      4,
+      1.0
+    ],
+    [
+      "starter_3.png",
+      3,
+      3,
+      1.0
+    ]
+  ],
+  "confidence": {
+    "cnn": {
+      "conf_ge_099": 0.9349,
+      "acc_conf_ge_099": 0.9996791100652476,
+      "n_conf_lt_09": 211,
+      "acc_conf_lt_09": 0.6919431279620853,
+      "wrong_below_09": 0.8024691358024691,
+      "median_conf_wrong": 0.7308459877967834
+    },
+    "mlp": {
+      "conf_ge_099": 0.8968,
+      "acc_conf_ge_099": 0.9978813559322034,
+      "n_conf_lt_09": 403,
+      "acc_conf_lt_09": 0.6401985111662531,
+      "wrong_below_09": 0.7004830917874396,
+      "median_conf_wrong": 0.75596022605896
+    }
+  },
+  "hard_tests": {
+    "n": 30,
+    "naive_correct": 4,
+    "mnist_style_cnn": 16,
+    "script": "python -m src.photo_test"
+  },
+  "user_tests_columns": [
+    "file",
+    "label",
+    "cnn_pred",
+    "cnn_confidence"
+  ]
+}
